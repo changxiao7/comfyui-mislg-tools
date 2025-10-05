@@ -36,4 +36,4 @@
 1. 将本仓库克隆到 ComfyUI 的 `custom_nodes` 目录：
 ```bash
 cd ComfyUI/custom_nodes
-git clone https://github.com/changxiao7/comfyui-mislg_tools.git
+git clone https://github.com/changxiao7/comfyui-mislg-tools.git
