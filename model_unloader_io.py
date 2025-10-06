@@ -70,7 +70,7 @@ class UniversalModelUnloaderWithIO:
     RETURN_TYPES = ("IMAGE", "LATENT", "CONDITIONING", "VAE", "CLIP", "MODEL", "CONTROL_NET", "UPSCALE_MODEL", any, "STRING", "STRING")
     RETURN_NAMES = ("image_out", "latent_out", "conditioning_out", "vae_out", "clip_out", "model_out", "controlnet_out", "upscale_out", "any_out", "unload_report", "memory_stats")
     FUNCTION = "unload_models"
-    CATEGORY = "MISLG Tools/Model Management"
+    CATEGORY = "MISLG Tools/Model"
     DESCRIPTION = "通用模型卸载器 - 基于ComfyUI内部API的高效版本"
 
     def unload_models(self, 
@@ -348,7 +348,7 @@ class SmartModelManager:
     RETURN_TYPES = ("IMAGE", "LATENT", "CONDITIONING", "VAE", "CLIP", "MODEL", "CONTROL_NET", "UPSCALE_MODEL", any, "STRING", "STRING")
     RETURN_NAMES = ("image_out", "latent_out", "conditioning_out", "vae_out", "clip_out", "model_out", "controlnet_out", "upscale_out", "any_out", "management_report", "recommendations")
     FUNCTION = "manage_memory"
-    CATEGORY = "MISLG Tools/Model Management"
+    CATEGORY = "MISLG Tools/Model"
     DESCRIPTION = "智能模型管理器 - 基于ComfyUI内部API"
 
     def manage_memory(self, 

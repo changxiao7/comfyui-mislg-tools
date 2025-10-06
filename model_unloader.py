@@ -61,7 +61,7 @@ class UniversalModelUnloader:
     RETURN_TYPES = ("STRING", "STRING")
     RETURN_NAMES = ("unload_report", "memory_stats")
     FUNCTION = "unload_models"
-    CATEGORY = "MISLG Tools/Model Management"
+    CATEGORY = "MISLG Tools/Model"
     DESCRIPTION = "通用模型卸载器\n\n卸载所有类型模型以释放显存，支持选择性卸载和多种卸载模式"
 
     def unload_models(self, trigger_unload, unload_mode, force_garbage_collect, clear_cuda_cache,
@@ -426,7 +426,7 @@ class SmartMemoryManager:
     RETURN_TYPES = ("STRING", "STRING")
     RETURN_NAMES = ("management_report", "recommendations")
     FUNCTION = "manage_memory"
-    CATEGORY = "MISLG Tools/Model Management"
+    CATEGORY = "MISLG Tools/Model"
     DESCRIPTION = "智能内存管理器\n\n自动监控和管理模型内存使用，预防显存溢出"
 
     def manage_memory(self, auto_manage, memory_threshold_gb, aggressiveness):

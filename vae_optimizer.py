@@ -382,7 +382,7 @@ class ImageDataTypeFix:
     RETURN_TYPES = ("IMAGE", "STRING")
     RETURN_NAMES = ("image", "repair_report")
     FUNCTION = "fix_data_type"
-    CATEGORY = "MISLG Tools/VAE"
+    CATEGORY = "MISLG Tools/Image"
     DESCRIPTION = "图像数据类型修复节点\n\n专门解决 'Cannot handle this data type' 错误"
 
     def fix_data_type(self, image, force_float32, fix_problematic_shapes, debug_info):
