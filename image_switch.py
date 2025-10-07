@@ -186,7 +186,7 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "ImageSwitchManual": "🔄 图片手动切换",
+    "ImageSwitchManual": "🔄 图片自动切换",
     "ImageSwitchAdvanced": "🔄 高级图片切换",
     "ImageBlendSwitch": "🔄 图片混合切换",
 }

@@ -138,6 +138,46 @@ class WorkflowValidator:
         validation_report = "\n".join(report)
         return (fixed_audio, fixed_video, fixed_latent, validation_report)
 
+class ModelSwitch:
+    """模型切换器 - 专门用于切换MODEL类型数据"""
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "select_input": (["input1", "input2"], {"default": "input1"}),
+            },
+            "optional": {
+                "model1": ("MODEL",),
+                "model2": ("MODEL",),
+            }
+        }
+    
+    RETURN_TYPES = ("MODEL", "STRING")
+    RETURN_NAMES = ("model", "status")
+    FUNCTION = "switch_model"
+    CATEGORY = "MISLG Tools/Switches"
+
+    def switch_model(self, select_input, model1=None, model2=None):
+        status = f"模型切换器: 选择 {select_input}"
+        
+        if select_input == "input1" and model1 is not None:
+            return (model1, status)
+        elif select_input == "input2" and model2 is not None:
+            return (model2, status)
+        
+        # 如果选择的输入不存在，返回另一个输入
+        if model1 is not None:
+            status += " (回退到输入1)"
+            return (model1, status)
+        elif model2 is not None:
+            status += " (回退到输入2)"
+            return (model2, status)
+        else:
+            # 两个输入都为空，返回状态信息
+            status += " (无可用模型)"
+            return (None, status)
+
 class AudioSwitch:
     """音频切换器 - 专门用于切换AUDIO类型数据"""
     
@@ -420,10 +460,53 @@ class BooleanSwitch:
             status += " (使用默认值False)"
             return (False, status)
 
+class MaskBinarySwitch:
+    """遮罩二进制切换器 - 专门用于切换MASK类型数据，支持单输入不报错"""
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "select_input": (["input1", "input2"], {"default": "input1"}),
+            },
+            "optional": {
+                "input1": ("MASK",),
+                "input2": ("MASK",),
+            }
+        }
+    
+    RETURN_TYPES = ("MASK", "STRING")
+    RETURN_NAMES = ("mask", "status")
+    FUNCTION = "switch_mask"
+    CATEGORY = "MISLG Tools/Switches"
+
+    def switch_mask(self, select_input, input1=None, input2=None):
+        status = f"遮罩切换器: 选择 {select_input}"
+        
+        # 优先返回选择的输入
+        if select_input == "input1" and input1 is not None:
+            return (input1, status)
+        elif select_input == "input2" and input2 is not None:
+            return (input2, status)
+        
+        # 如果选择的输入不存在，返回另一个输入
+        if input1 is not None:
+            status += " (回退到输入1)"
+            return (input1, status)
+        elif input2 is not None:
+            status += " (回退到输入2)"
+            return (input2, status)
+        else:
+            # 两个输入都为空，返回默认遮罩 (64x64 全白遮罩)
+            status += " (使用默认全白遮罩)"
+            default_mask = torch.ones((64, 64), dtype=torch.float32)
+            return (default_mask, status)
+
 # 节点注册
 NODE_CLASS_MAPPINGS = {
     "MemoryOptimizer": MemoryOptimizer,
     "WorkflowValidator": WorkflowValidator,
+    "ModelSwitch": ModelSwitch,  # 修改后的模型切换器
     "AudioSwitch": AudioSwitch,
     "VideoSwitch": VideoSwitch,
     "ConditioningSwitch": ConditioningSwitch,
@@ -431,11 +514,13 @@ NODE_CLASS_MAPPINGS = {
     "IntSwitch": IntSwitch,
     "FloatSwitch": FloatSwitch,
     "BooleanSwitch": BooleanSwitch,
+    "MaskBinarySwitch": MaskBinarySwitch,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "MemoryOptimizer": "🧹 内存优化",
     "WorkflowValidator": "✅ 工作流验证",
+    "ModelSwitch": "🤖 模型切换器",  # 修改后的显示名称
     "AudioSwitch": "🎵 音频切换器",
     "VideoSwitch": "🎬 视频切换器",
     "ConditioningSwitch": "🔗 条件切换器",
@@ -443,4 +528,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "IntSwitch": "🔢 整数切换器",
     "FloatSwitch": "📊 浮点数切换器",
     "BooleanSwitch": "🔘 布尔值切换器",
+    "MaskBinarySwitch": "🎭 遮罩切换器",
 }
