@@ -220,47 +220,6 @@ class VideoSwitch:
             default_video = torch.zeros((1, 64, 64, 3), dtype=torch.float32)
             return (default_video, status)
 
-class LatentSwitch:
-    """潜在空间切换器 - 专门用于切换LATENT类型数据"""
-    
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "select_input": (["input1", "input2"], {"default": "input1"}),
-            },
-            "optional": {
-                "input1": ("LATENT",),
-                "input2": ("LATENT",),
-            }
-        }
-    
-    RETURN_TYPES = ("LATENT", "STRING")
-    RETURN_NAMES = ("latent", "status")
-    FUNCTION = "switch_latent"
-    CATEGORY = "MISLG Tools/Switches"
-
-    def switch_latent(self, select_input, input1=None, input2=None):
-        status = f"潜在空间切换器: 选择 {select_input}"
-        
-        if select_input == "input1" and input1 is not None:
-            return (input1, status)
-        elif select_input == "input2" and input2 is not None:
-            return (input2, status)
-        
-        # 如果选择的输入不存在，返回另一个输入或默认值
-        if input1 is not None:
-            status += " (回退到输入1)"
-            return (input1, status)
-        elif input2 is not None:
-            status += " (回退到输入2)"
-            return (input2, status)
-        else:
-            # 两个输入都为空，返回默认潜在空间
-            status += " (使用默认潜在空间)"
-            default_latent = {"samples": torch.zeros([1, 4, 64, 64])}
-            return (default_latent, status)
-
 class ConditioningSwitch:
     """条件切换器 - 专门用于切换CONDITIONING类型数据"""
     
@@ -461,72 +420,17 @@ class BooleanSwitch:
             status += " (使用默认值False)"
             return (False, status)
 
-class SimpleAudioSwitch:
-    """简单音频切换器 - 更简单的接口，避免输入缺失问题"""
-    
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "select_input": (["input_a", "input_b"], {"default": "input_a"}),
-                "input_a": ("AUDIO",),
-                "input_b": ("AUDIO",),
-            }
-        }
-    
-    RETURN_TYPES = ("AUDIO", "STRING")
-    RETURN_NAMES = ("audio", "status")
-    FUNCTION = "switch_audio_simple"
-    CATEGORY = "MISLG Tools/Switches"
-
-    def switch_audio_simple(self, select_input, input_a, input_b):
-        status = f"简单音频切换器: 选择 {select_input}"
-        
-        if select_input == "input_a":
-            return (input_a, status)
-        else:
-            return (input_b, status)
-
-class SimpleVideoSwitch:
-    """简单视频切换器 - 更简单的接口，避免输入缺失问题"""
-    
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "select_input": (["input_a", "input_b"], {"default": "input_a"}),
-                "input_a": ("VIDEO",),
-                "input_b": ("VIDEO",),
-            }
-        }
-    
-    RETURN_TYPES = ("VIDEO", "STRING")
-    RETURN_NAMES = ("video", "status")
-    FUNCTION = "switch_video_simple"
-    CATEGORY = "MISLG Tools/Switches"
-
-    def switch_video_simple(self, select_input, input_a, input_b):
-        status = f"简单视频切换器: 选择 {select_input}"
-        
-        if select_input == "input_a":
-            return (input_a, status)
-        else:
-            return (input_b, status)
-
 # 节点注册
 NODE_CLASS_MAPPINGS = {
     "MemoryOptimizer": MemoryOptimizer,
     "WorkflowValidator": WorkflowValidator,
     "AudioSwitch": AudioSwitch,
     "VideoSwitch": VideoSwitch,
-    "LatentSwitch": LatentSwitch,
     "ConditioningSwitch": ConditioningSwitch,
     "StringSwitch": StringSwitch,
     "IntSwitch": IntSwitch,
     "FloatSwitch": FloatSwitch,
     "BooleanSwitch": BooleanSwitch,
-    "SimpleAudioSwitch": SimpleAudioSwitch,
-    "SimpleVideoSwitch": SimpleVideoSwitch,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -534,12 +438,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "WorkflowValidator": "✅ 工作流验证",
     "AudioSwitch": "🎵 音频切换器",
     "VideoSwitch": "🎬 视频切换器",
-    "LatentSwitch": "🎭 潜在空间切换器",
     "ConditioningSwitch": "🔗 条件切换器",
     "StringSwitch": "📝 文本切换器",
     "IntSwitch": "🔢 整数切换器",
     "FloatSwitch": "📊 浮点数切换器",
     "BooleanSwitch": "🔘 布尔值切换器",
-    "SimpleAudioSwitch": "🎵 简单音频切换器",
-    "SimpleVideoSwitch": "🎬 简单视频切换器",
 }

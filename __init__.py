@@ -2,7 +2,7 @@
 MISLG Tools - ComfyUI 自定义工具节点包
 提供空输入输出节点、VAE优化、图像转换、图片切换、模型管理等实用工具
 作者: MISLG
-版本: 1.3.1
+版本: 1.3.3
 """
 
 import os
@@ -27,6 +27,7 @@ try:
     from .image_switch import *
     from .model_unloader import *      # 原有的模型卸载模块
     from .model_unloader_io import *   # 新增带IO接口的模型卸载模块
+    from .instant_preview_loader import * # 即时预览图片加载器与路径助手模块
 
     # ======================================================
     # 合并节点映射
@@ -43,7 +44,8 @@ try:
         utils,              # ✅ 包含 MISLG 工具节点模块
         image_switch,
         model_unloader,
-        model_unloader_io
+        model_unloader_io,
+        instant_preview_loader # ✅ 即时预览图片加载器与路径助手模块
     ]
 
     for module in modules:
@@ -55,9 +57,10 @@ try:
     # ======================================================
     # 输出加载信息
     # ======================================================
-    print(f"✅ MISLG Tools v1.3.1 已成功加载")
+    print(f"✅ MISLG Tools v1.3.3 已成功加载")
     print(f"   已注册 {len(NODE_CLASS_MAPPINGS)} 个节点")
     print(f"   新增功能: MISLG 工具节点模块 (双输入自动判断、图像优先、批量合并)")
+    print(f"   新增功能: 即时预览图片加载器与路径助手 (即时预览、路径管理、多模式操作)")
 
     if len(NODE_CLASS_MAPPINGS) > 0:
         print(f"   已加载节点: {', '.join(NODE_CLASS_MAPPINGS.keys())}")
@@ -81,6 +84,7 @@ except ImportError as e:
         from .utils import *
         from .image_switch import *
         from .model_unloader import *
+        from .instant_preview_loader import * # 尝试加载即时预览图片加载器模块
 
         modules = [
             empty_input_nodes,
@@ -90,6 +94,7 @@ except ImportError as e:
             utils,
             image_switch,
             model_unloader,
+            instant_preview_loader # 尝试加载即时预览图片加载器模块
         ]
 
         for module in modules:
@@ -110,6 +115,6 @@ except Exception as e:
 # ======================================================
 # 模块元信息
 # ======================================================
-__version__ = "1.3.1"
+__version__ = "1.3.3"
 __author__ = "MISLG"
-__description__ = "MISLG Tools - ComfyUI 自定义工具节点包 (含 MISLG 工具节点模块)"
+__description__ = "MISLG Tools - ComfyUI 自定义工具节点包 (含 MISLG 工具节点模块、即时预览图片加载器)"
