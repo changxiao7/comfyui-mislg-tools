@@ -90,7 +90,7 @@ class PixelDataAnalyzer:
     RETURN_TYPES = ("STRING", "STRING", "STRING")
     RETURN_NAMES = ("statistics", "data_sample", "shape_info")
     FUNCTION = "analyze_pixels"
-    CATEGORY = "MISLG Tools/图像工具"
+    CATEGORY = "MISLG Tools/图像"
     DESCRIPTION = "分析像素数据的统计信息"
 
     def analyze_pixels(self, pixel_data, analyze_channels, show_sample_data):
