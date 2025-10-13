@@ -8,6 +8,8 @@ import numpy as np
 import os
 import time
 import json
+import tempfile
+import shutil
 from datetime import datetime
 from PIL import Image, PngImagePlugin
 import folder_paths
@@ -141,6 +143,11 @@ class AdvancedImageSaver:
     def __init__(self):
         self.output_dir = folder_paths.get_output_directory()
         self.type = "output"
+        # 创建临时预览目录
+        self.temp_dir = os.path.join(self.output_dir, "temp_previews")
+        os.makedirs(self.temp_dir, exist_ok=True)
+        # 清理旧的预览文件
+        self.cleanup_old_previews()
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -173,13 +180,27 @@ class AdvancedImageSaver:
     OUTPUT_NODE = True
     DESCRIPTION = "基于官方SaveImage优化的高级图像保存器，支持完整工作流嵌入"
     
+    def cleanup_old_previews(self):
+        """清理旧的预览文件，保留最近一小时的预览"""
+        try:
+            current_time = time.time()
+            one_hour_ago = current_time - 1800  # 1小时前
+            
+            if os.path.exists(self.temp_dir):
+                for filename in os.listdir(self.temp_dir):
+                    file_path = os.path.join(self.temp_dir, filename)
+                    if os.path.isfile(file_path):
+                        # 检查文件创建时间
+                        file_time = os.path.getctime(file_path)
+                        if file_time < one_hour_ago:
+                            os.remove(file_path)
+                            print(f"已清理旧预览文件: {filename}")
+        except Exception as e:
+            print(f"清理预览文件时出错: {e}")
+    
     def save_images(self, 图像, 保存目录, 文件名前缀, 图像格式, 图像质量, 添加日期目录, 添加日期, 自动保存, WEBP无损, 关闭预览,
                    自定义路径="", prompt=None, extra_pnginfo=None):
         """保存图像 - 基于官方实现优化"""
-        
-        # 检查是否启用自动保存
-        if not 自动保存:
-            return ("等待自动保存启用...",)
         
         # 确定输出目录
         if 保存目录 == "自定义目录" and 自定义路径.strip():
@@ -247,26 +268,42 @@ class AdvancedImageSaver:
                 save_kwargs["quality"] = 图像质量
                 save_kwargs["lossless"] = WEBP无损
             
-            try:
-                img.save(save_path, **save_kwargs)
+            # 保存图像（如果自动保存开启）
+            if 自动保存:
+                try:
+                    img.save(save_path, **save_kwargs)
+                    saved_files.append(save_path)
+                    print(f"已保存图像: {save_path}")
+                except Exception as e:
+                    print(f"保存图像失败: {str(e)}")
+            
+            # 构建预览信息（除非关闭预览）
+            if not 关闭预览:
+                # 为预览创建临时文件
+                preview_filename = f"preview_{filename}_{counter:05}_.png"
+                preview_path = os.path.join(self.temp_dir, preview_filename)
                 
-                # 构建预览信息
-                if not 关闭预览:
-                    # 计算相对于输出目录的路径
-                    rel_path = os.path.relpath(full_output_folder, self.output_dir)
-                    if rel_path == ".":
-                        rel_path = ""
+                try:
+                    # 保存预览图像（总是保存为PNG格式）
+                    preview_img = img.copy()
+                    preview_metadata = PngImagePlugin.PngInfo()
+                    if prompt is not None:
+                        preview_metadata.add_text("prompt", json.dumps(prompt))
+                    preview_metadata.add_text("generator", "MISLG AdvancedImageSaver Preview")
                     
+                    preview_img.save(preview_path, pnginfo=preview_metadata)
+                    
+                    # 添加预览信息到结果
                     results.append({
-                        "filename": file,
-                        "subfolder": rel_path,
-                        "type": self.type
+                        "filename": preview_filename,
+                        "subfolder": "temp_previews",  # 明确指定子文件夹
+                        "type": "output"
                     })
-                
-                saved_files.append(save_path)
-                counter += 1
-            except Exception as e:
-                print(f"保存图像失败: {str(e)}")
+                    print(f"已创建预览: {preview_path}")
+                except Exception as e:
+                    print(f"创建预览失败: {str(e)}")
+            
+            counter += 1
         
         # 生成详细信息
         detail_info = []
@@ -277,19 +314,24 @@ class AdvancedImageSaver:
         detail_info.append(f"WEBP无损: {'是' if WEBP无损 else '否'}")
         detail_info.append(f"日期目录: {'已添加' if 添加日期目录 else '未添加'}")
         detail_info.append(f"文件名日期: {'已添加' if 添加日期 else '未添加'}")
+        detail_info.append(f"自动保存: {'已开启' if 自动保存 else '已关闭'}")
         detail_info.append(f"预览: {'已关闭' if 关闭预览 else '已开启'}")
-        detail_info.append(f"保存数量: {len(saved_files)} 张图像")
         
-        if saved_files:
-            detail_info.append("\n=== 已保存文件 ===")
-            for i, file_path in enumerate(saved_files):
-                detail_info.append(f"{i+1}. {os.path.basename(file_path)}")
+        if 自动保存:
+            detail_info.append(f"保存数量: {len(saved_files)} 张图像")
+            if saved_files:
+                detail_info.append("\n=== 已保存文件 ===")
+                for i, file_path in enumerate(saved_files):
+                    detail_info.append(f"{i+1}. {os.path.basename(file_path)}")
+        else:
+            detail_info.append(f"预览数量: {len(图像)} 张图像")
+            detail_info.append("注意: 自动保存已关闭，图像仅用于预览")
         
         # 返回UI信息和详细信息
         if 关闭预览:
             return ("\n".join(detail_info),)
         else:
-            # 确保返回格式正确，符合ComfyUI的预期
+            # 使用官方SaveImage的返回格式
             return {"ui": {"images": results}, "result": ("\n".join(detail_info),)}
 
 # 节点注册

@@ -2,7 +2,7 @@
 MISLG Tools - ComfyUI 自定义工具节点包
 提供空输入输出节点、VAE优化、图像转换、图片切换、模型管理等实用工具
 作者: MISLG
-版本: 1.3.3
+版本: 1.3.4
 """
 
 import os
@@ -28,6 +28,7 @@ try:
     from .model_unloader import *      # 原有的模型卸载模块
     from .model_unloader_io import *   # 新增带IO接口的模型卸载模块
     from .instant_preview_loader import * # 即时预览图片加载器与路径助手模块
+    from .ksampler_with_info import *  # ✅ 新增：采样器信息模块
 
     # ======================================================
     # 合并节点映射
@@ -45,7 +46,8 @@ try:
         image_switch,
         model_unloader,
         model_unloader_io,
-        instant_preview_loader # ✅ 即时预览图片加载器与路径助手模块
+        instant_preview_loader, # ✅ 即时预览图片加载器与路径助手模块
+        ksampler_with_info     # ✅ 新增：采样器信息模块
     ]
 
     for module in modules:
@@ -57,10 +59,11 @@ try:
     # ======================================================
     # 输出加载信息
     # ======================================================
-    print(f"✅ MISLG Tools v1.3.3 已成功加载")
+    print(f"✅ MISLG Tools v1.3.4 已成功加载")
     print(f"   已注册 {len(NODE_CLASS_MAPPINGS)} 个节点")
     print(f"   新增功能: MISLG 工具节点模块 (双输入自动判断、图像优先、批量合并)")
     print(f"   新增功能: 即时预览图片加载器与路径助手 (即时预览、路径管理、多模式操作)")
+    print(f"   新增功能: K采样器信息模块 (带详细信息的采样器)")
 
     if len(NODE_CLASS_MAPPINGS) > 0:
         print(f"   已加载节点: {', '.join(NODE_CLASS_MAPPINGS.keys())}")
@@ -85,6 +88,7 @@ except ImportError as e:
         from .image_switch import *
         from .model_unloader import *
         from .instant_preview_loader import * # 尝试加载即时预览图片加载器模块
+        from .ksampler_with_info import *    # ✅ 尝试加载采样器信息模块
 
         modules = [
             empty_input_nodes,
@@ -94,7 +98,8 @@ except ImportError as e:
             utils,
             image_switch,
             model_unloader,
-            instant_preview_loader # 尝试加载即时预览图片加载器模块
+            instant_preview_loader, # 尝试加载即时预览图片加载器模块
+            ksampler_with_info     # ✅ 尝试加载采样器信息模块
         ]
 
         for module in modules:
@@ -115,6 +120,6 @@ except Exception as e:
 # ======================================================
 # 模块元信息
 # ======================================================
-__version__ = "1.3.3"
+__version__ = "1.3.4"
 __author__ = "MISLG"
-__description__ = "MISLG Tools - ComfyUI 自定义工具节点包 (含 MISLG 工具节点模块、即时预览图片加载器)"
+__description__ = "MISLG Tools - ComfyUI 自定义工具节点包 (含 MISLG 工具节点模块、即时预览图片加载器、K采样器信息模块)"
