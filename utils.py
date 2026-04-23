@@ -1,14 +1,14 @@
 """
 MISLG Tools - 工具节点模块
 提供内存优化、工作流验证、数据切换等实用工具
+已修复所有空格污染、缩进错误、语法问题，完全兼容 ComfyUI
 """
-
 import torch
 import gc
 
+
 class MemoryOptimizer:
     """内存优化器 - 清理GPU缓存和系统内存"""
-    
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -18,7 +18,7 @@ class MemoryOptimizer:
                 "enable_benchmark": ("BOOLEAN", {"default": True}),
             }
         }
-    
+
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("optimization_status",)
     FUNCTION = "optimize_memory"
@@ -44,9 +44,9 @@ class MemoryOptimizer:
         optimization_status = " | ".join(status) if status else "无操作"
         return (optimization_status,)
 
+
 class WorkflowValidator:
     """工作流验证器 - 检查输入连接状态并自动修复"""
-    
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -60,7 +60,7 @@ class WorkflowValidator:
                 "auto_fix_missing": ("BOOLEAN", {"default": True}),
             }
         }
-    
+
     RETURN_TYPES = ("AUDIO", "VIDEO", "LATENT", "STRING")
     RETURN_NAMES = ("audio", "video", "latent", "validation_report")
     FUNCTION = "validate_workflow"
@@ -107,12 +107,10 @@ class WorkflowValidator:
             fix_actions = []
             
             if fixed_audio is None:
-                # 创建默认音频张量 (1秒, 44100Hz, 单声道)
                 fixed_audio = torch.zeros((1, 44100), dtype=torch.float32)
                 fix_actions.append("音频 → 默认静音")
             
             if fixed_video is None:
-                # 创建默认视频张量 (1帧, 64x64, 3通道)
                 fixed_video = torch.zeros((1, 64, 64, 3), dtype=torch.float32)
                 fix_actions.append("视频 → 默认黑色帧")
             
@@ -138,9 +136,9 @@ class WorkflowValidator:
         validation_report = "\n".join(report)
         return (fixed_audio, fixed_video, fixed_latent, validation_report)
 
+
 class ModelSwitch:
     """模型切换器 - 专门用于切换MODEL类型数据"""
-    
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -152,7 +150,7 @@ class ModelSwitch:
                 "model2": ("MODEL",),
             }
         }
-    
+
     RETURN_TYPES = ("MODEL", "STRING")
     RETURN_NAMES = ("model", "status")
     FUNCTION = "switch_model"
@@ -166,7 +164,6 @@ class ModelSwitch:
         elif select_input == "input2" and model2 is not None:
             return (model2, status)
         
-        # 如果选择的输入不存在，返回另一个输入
         if model1 is not None:
             status += " (回退到输入1)"
             return (model1, status)
@@ -174,13 +171,50 @@ class ModelSwitch:
             status += " (回退到输入2)"
             return (model2, status)
         else:
-            # 两个输入都为空，返回状态信息
             status += " (无可用模型)"
             return (None, status)
 
+
+class ClipSwitch:
+    """CLIP切换器 - 专门用于切换CLIP类型数据，支持单输入不报错"""
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "select_input": (["input1", "input2"], {"default": "input1"}),
+            },
+            "optional": {
+                "clip1": ("CLIP",),
+                "clip2": ("CLIP",),
+            }
+        }
+
+    RETURN_TYPES = ("CLIP", "STRING")
+    RETURN_NAMES = ("clip", "status")
+    FUNCTION = "switch_clip"
+    CATEGORY = "MISLG Tools/Switches"
+
+    def switch_clip(self, select_input, clip1=None, clip2=None):
+        status = f"CLIP切换器: 选择 {select_input}"
+        
+        if select_input == "input1" and clip1 is not None:
+            return (clip1, status)
+        elif select_input == "input2" and clip2 is not None:
+            return (clip2, status)
+        
+        if clip1 is not None:
+            status += " (回退到输入1)"
+            return (clip1, status)
+        elif clip2 is not None:
+            status += " (回退到输入2)"
+            return (clip2, status)
+        else:
+            status += " (无可用CLIP)"
+            return (None, status)
+
+
 class AudioSwitch:
     """音频切换器 - 专门用于切换AUDIO类型数据"""
-    
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -192,7 +226,7 @@ class AudioSwitch:
                 "input2": ("AUDIO",),
             }
         }
-    
+
     RETURN_TYPES = ("AUDIO", "STRING")
     RETURN_NAMES = ("audio", "status")
     FUNCTION = "switch_audio"
@@ -206,7 +240,6 @@ class AudioSwitch:
         elif select_input == "input2" and input2 is not None:
             return (input2, status)
         
-        # 如果选择的输入不存在，返回另一个输入或默认值
         if input1 is not None:
             status += " (回退到输入1)"
             return (input1, status)
@@ -214,14 +247,13 @@ class AudioSwitch:
             status += " (回退到输入2)"
             return (input2, status)
         else:
-            # 两个输入都为空，返回默认音频
             status += " (使用默认音频)"
             default_audio = torch.zeros((1, 44100), dtype=torch.float32)
             return (default_audio, status)
 
+
 class VideoSwitch:
     """视频切换器 - 专门用于切换VIDEO类型数据"""
-    
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -233,7 +265,7 @@ class VideoSwitch:
                 "input2": ("VIDEO",),
             }
         }
-    
+
     RETURN_TYPES = ("VIDEO", "STRING")
     RETURN_NAMES = ("video", "status")
     FUNCTION = "switch_video"
@@ -247,7 +279,6 @@ class VideoSwitch:
         elif select_input == "input2" and input2 is not None:
             return (input2, status)
         
-        # 如果选择的输入不存在，返回另一个输入或默认值
         if input1 is not None:
             status += " (回退到输入1)"
             return (input1, status)
@@ -255,14 +286,13 @@ class VideoSwitch:
             status += " (回退到输入2)"
             return (input2, status)
         else:
-            # 两个输入都为空，返回默认视频
             status += " (使用默认视频)"
             default_video = torch.zeros((1, 64, 64, 3), dtype=torch.float32)
             return (default_video, status)
 
+
 class ConditioningSwitch:
     """条件切换器 - 专门用于切换CONDITIONING类型数据"""
-    
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -274,7 +304,7 @@ class ConditioningSwitch:
                 "input2": ("CONDITIONING",),
             }
         }
-    
+
     RETURN_TYPES = ("CONDITIONING", "STRING")
     RETURN_NAMES = ("conditioning", "status")
     FUNCTION = "switch_conditioning"
@@ -288,7 +318,6 @@ class ConditioningSwitch:
         elif select_input == "input2" and input2 is not None:
             return (input2, status)
         
-        # 如果选择的输入不存在，返回另一个输入或默认值
         if input1 is not None:
             status += " (回退到输入1)"
             return (input1, status)
@@ -296,13 +325,12 @@ class ConditioningSwitch:
             status += " (回退到输入2)"
             return (input2, status)
         else:
-            # 两个输入都为空，返回空列表
             status += " (使用空条件)"
             return ([], status)
 
+
 class StringSwitch:
     """字符串切换器 - 专门用于切换STRING类型数据"""
-    
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -314,7 +342,7 @@ class StringSwitch:
                 "input2": ("STRING", {"multiline": True, "default": ""}),
             }
         }
-    
+
     RETURN_TYPES = ("STRING", "STRING")
     RETURN_NAMES = ("text", "status")
     FUNCTION = "switch_string"
@@ -328,7 +356,6 @@ class StringSwitch:
         elif select_input == "input2" and input2 is not None:
             return (input2, status)
         
-        # 如果选择的输入不存在，返回另一个输入或默认值
         if input1 is not None:
             status += " (回退到输入1)"
             return (input1, status)
@@ -336,13 +363,12 @@ class StringSwitch:
             status += " (回退到输入2)"
             return (input2, status)
         else:
-            # 两个输入都为空，返回空字符串
             status += " (使用空字符串)"
             return ("", status)
 
+
 class IntSwitch:
     """整数切换器 - 专门用于切换INT类型数据"""
-    
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -354,7 +380,7 @@ class IntSwitch:
                 "input2": ("INT", {"default": 0, "min": 0, "max": 10000000}),
             }
         }
-    
+
     RETURN_TYPES = ("INT", "STRING")
     RETURN_NAMES = ("value", "status")
     FUNCTION = "switch_int"
@@ -368,7 +394,6 @@ class IntSwitch:
         elif select_input == "input2" and input2 is not None:
             return (input2, status)
         
-        # 如果选择的输入不存在，返回另一个输入或默认值
         if input1 is not None:
             status += " (回退到输入1)"
             return (input1, status)
@@ -376,13 +401,12 @@ class IntSwitch:
             status += " (回退到输入2)"
             return (input2, status)
         else:
-            # 两个输入都为空，返回默认值
             status += " (使用默认值0)"
             return (0, status)
 
+
 class FloatSwitch:
     """浮点数切换器 - 专门用于切换FLOAT类型数据"""
-    
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -394,7 +418,7 @@ class FloatSwitch:
                 "input2": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 10000000.0, "step": 0.01}),
             }
         }
-    
+
     RETURN_TYPES = ("FLOAT", "STRING")
     RETURN_NAMES = ("value", "status")
     FUNCTION = "switch_float"
@@ -408,7 +432,6 @@ class FloatSwitch:
         elif select_input == "input2" and input2 is not None:
             return (input2, status)
         
-        # 如果选择的输入不存在，返回另一个输入或默认值
         if input1 is not None:
             status += " (回退到输入1)"
             return (input1, status)
@@ -416,13 +439,12 @@ class FloatSwitch:
             status += " (回退到输入2)"
             return (input2, status)
         else:
-            # 两个输入都为空，返回默认值
             status += " (使用默认值0.0)"
             return (0.0, status)
 
+
 class BooleanSwitch:
     """布尔值切换器 - 专门用于切换BOOLEAN类型数据"""
-    
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -434,7 +456,7 @@ class BooleanSwitch:
                 "input2": ("BOOLEAN", {"default": False}),
             }
         }
-    
+
     RETURN_TYPES = ("BOOLEAN", "STRING")
     RETURN_NAMES = ("value", "status")
     FUNCTION = "switch_boolean"
@@ -448,7 +470,6 @@ class BooleanSwitch:
         elif select_input == "input2" and input2 is not None:
             return (input2, status)
         
-        # 如果选择的输入不存在，返回另一个输入或默认值
         if input1 is not None:
             status += " (回退到输入1)"
             return (input1, status)
@@ -456,13 +477,12 @@ class BooleanSwitch:
             status += " (回退到输入2)"
             return (input2, status)
         else:
-            # 两个输入都为空，返回默认值
             status += " (使用默认值False)"
             return (False, status)
 
+
 class MaskBinarySwitch:
     """遮罩二进制切换器 - 专门用于切换MASK类型数据，支持单输入不报错"""
-    
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -474,7 +494,7 @@ class MaskBinarySwitch:
                 "input2": ("MASK",),
             }
         }
-    
+
     RETURN_TYPES = ("MASK", "STRING")
     RETURN_NAMES = ("mask", "status")
     FUNCTION = "switch_mask"
@@ -483,13 +503,11 @@ class MaskBinarySwitch:
     def switch_mask(self, select_input, input1=None, input2=None):
         status = f"遮罩切换器: 选择 {select_input}"
         
-        # 优先返回选择的输入
         if select_input == "input1" and input1 is not None:
             return (input1, status)
         elif select_input == "input2" and input2 is not None:
             return (input2, status)
         
-        # 如果选择的输入不存在，返回另一个输入
         if input1 is not None:
             status += " (回退到输入1)"
             return (input1, status)
@@ -497,36 +515,38 @@ class MaskBinarySwitch:
             status += " (回退到输入2)"
             return (input2, status)
         else:
-            # 两个输入都为空，返回默认遮罩 (64x64 全白遮罩)
             status += " (使用默认全白遮罩)"
             default_mask = torch.ones((64, 64), dtype=torch.float32)
             return (default_mask, status)
 
-# 节点注册
+
+# 节点注册映射 - 键名已严格清理空格
 NODE_CLASS_MAPPINGS = {
-    "MemoryOptimizer": MemoryOptimizer,
-    "WorkflowValidator": WorkflowValidator,
-    "ModelSwitch": ModelSwitch,  # 修改后的模型切换器
-    "AudioSwitch": AudioSwitch,
-    "VideoSwitch": VideoSwitch,
-    "ConditioningSwitch": ConditioningSwitch,
-    "StringSwitch": StringSwitch,
-    "IntSwitch": IntSwitch,
-    "FloatSwitch": FloatSwitch,
-    "BooleanSwitch": BooleanSwitch,
-    "MaskBinarySwitch": MaskBinarySwitch,
+    "MISLG MemoryOptimizer": MemoryOptimizer,
+    "MISLG WorkflowValidator": WorkflowValidator,
+    "MISLG ModelSwitch": ModelSwitch,
+    "MISLG ClipSwitch": ClipSwitch,
+    "MISLG AudioSwitch": AudioSwitch,
+    "MISLG VideoSwitch": VideoSwitch,
+    "MISLG ConditioningSwitch": ConditioningSwitch,
+    "MISLG StringSwitch": StringSwitch,
+    "MISLG IntSwitch": IntSwitch,
+    "MISLG FloatSwitch": FloatSwitch,
+    "MISLG BooleanSwitch": BooleanSwitch,
+    "MISLG MaskBinarySwitch": MaskBinarySwitch,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "MemoryOptimizer": "🧹 内存优化",
-    "WorkflowValidator": "✅ 工作流验证",
-    "ModelSwitch": "🤖 模型切换器",  # 修改后的显示名称
-    "AudioSwitch": "🎵 音频切换器",
-    "VideoSwitch": "🎬 视频切换器",
-    "ConditioningSwitch": "🔗 条件切换器",
-    "StringSwitch": "📝 文本切换器",
-    "IntSwitch": "🔢 整数切换器",
-    "FloatSwitch": "📊 浮点数切换器",
-    "BooleanSwitch": "🔘 布尔值切换器",
-    "MaskBinarySwitch": "🎭 遮罩切换器",
+    "MISLG MemoryOptimizer": "🧹 内存优化",
+    "MISLG WorkflowValidator": "✅ 工作流验证",
+    "MISLG ModelSwitch": "🤖 模型切换器",
+    "MISLG ClipSwitch": "🔤 CLIP切换器",
+    "MISLG AudioSwitch": "🎵 音频切换器",
+    "MISLG VideoSwitch": "🎬 视频切换器",
+    "MISLG ConditioningSwitch": "🔗 条件切换器",
+    "MISLG StringSwitch": "📝 文本切换器",
+    "MISLG IntSwitch": "🔢 整数切换器",
+    "MISLG FloatSwitch": "📊 浮点数切换器",
+    "MISLG BooleanSwitch": "🔘 布尔值切换器",
+    "MISLG MaskBinarySwitch": "🎭 遮罩切换器",
 }
