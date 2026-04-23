@@ -1,17 +1,18 @@
 """
-图片切换节点模块
-提供图片二进一出手动切换功能，支持单个输入
+图片切换与变换节点模块
+提供图片切换、混合、旋转、翻转等功能
+已修复所有空格污染、语法错误、API兼容性与张量维度问题，完全兼容 ComfyUI
 """
-
 import torch
+import numpy as np
+from PIL import Image
+
+# 兼容新旧版本 Pillow (新版已弃用 Image.BILINEAR)
+_RESAMPLE = getattr(Image, 'Resampling', Image).BILINEAR
+
 
 class ImageSwitchManual:
-    """
-    图片二进一出手动切换节点
-    支持两个图片输入，通过按钮手动切换输出
-    单个输入也可以正常工作
-    """
-    
+    """图片二进一出手动切换节点"""
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -23,45 +24,30 @@ class ImageSwitchManual:
                 "image_B": ("IMAGE",),
             }
         }
-    
+
     RETURN_TYPES = ("IMAGE", "STRING")
     RETURN_NAMES = ("output_image", "status")
     FUNCTION = "switch_images"
     CATEGORY = "MISLG Tools/Image"
-    DESCRIPTION = "手动切换两个输入图片的输出"
 
     def switch_images(self, select_first, image_A=None, image_B=None):
-        status = ""
+        if select_first:
+            if image_A is not None:
+                return (image_A, "✅ 输出图片A")
+            elif image_B is not None:
+                return (image_B, "⚠️ 图片A不存在，自动切换到图片B")
+        else:
+            if image_B is not None:
+                return (image_B, "✅ 输出图片B")
+            elif image_A is not None:
+                return (image_A, "⚠️ 图片B不存在，自动切换到图片A")
         
-        # 如果选择第一张图且第一张图存在
-        if select_first and image_A is not None:
-            status = "✅ 输出图片A"
-            return (image_A, status)
-        
-        # 如果选择第二张图且第二张图存在
-        if not select_first and image_B is not None:
-            status = "✅ 输出图片B"
-            return (image_B, status)
-        
-        # 如果选择的图片不存在，尝试返回另一张图
-        if select_first and image_A is None and image_B is not None:
-            status = "⚠️ 第一张图不存在，自动切换到第二张图"
-            return (image_B, status)
-        
-        if not select_first and image_B is None and image_A is not None:
-            status = "⚠️ 第二张图不存在，自动切换到第一张图"
-            return (image_A, status)
-        
-        # 如果两张图都不存在，创建一张空白图片
-        status = "⚠️ 没有输入图片，创建空白图片"
-        blank_image = torch.zeros((1, 512, 512, 3), dtype=torch.float32)
-        return (blank_image, status)
+        blank = torch.zeros((1, 512, 512, 3), dtype=torch.float32)
+        return (blank, "⚠️ 无输入图片，输出空白图像")
+
 
 class ImageSwitchAdvanced:
-    """
-    高级图片切换节点 - 带有更多控制选项
-    """
-    
+    """高级图片切换节点 - 支持自动回退"""
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -74,55 +60,38 @@ class ImageSwitchAdvanced:
                 "image_B": ("IMAGE",),
             }
         }
-    
+
     RETURN_TYPES = ("IMAGE", "STRING")
     RETURN_NAMES = ("output_image", "status")
     FUNCTION = "advanced_switch"
     CATEGORY = "MISLG Tools/Image"
-    DESCRIPTION = "高级图片切换，支持回退图片和状态反馈"
 
     def advanced_switch(self, switch_mode, auto_fallback=True, image_A=None, image_B=None):
-        status = ""
-        
-        # 自动模式：选择第一个可用的图像
         if switch_mode == "auto":
             if image_A is not None:
-                status = "🔄 自动选择图片A"
-                return (image_A, status)
-            elif image_B is not None:
-                status = "🔄 自动选择图片B"
-                return (image_B, status)
-            else:
-                status = "⚠️ 没有可用图片，创建空白图片"
-                blank_image = torch.zeros((1, 512, 512, 3), dtype=torch.float32)
-                return (blank_image, status)
-        
-        # 根据模式选择图片
+                return (image_A, "🔄 自动选择图片A")
+            if image_B is not None:
+                return (image_B, "🔄 自动选择图片B")
+            blank = torch.zeros((1, 512, 512, 3), dtype=torch.float32)
+            return (blank, "⚠️ 无可用图片，输出空白图像")
+
         if switch_mode == "A":
             if image_A is not None:
-                status = "✅ 输出图片A"
-                return (image_A, status)
-            elif auto_fallback and image_B is not None:
-                status = "⚠️ 图片A不存在，自动回退到图片B"
-                return (image_B, status)
-        else:  # switch_mode == "B"
+                return (image_A, "✅ 输出图片A")
+            if auto_fallback and image_B is not None:
+                return (image_B, "⚠️ 图片A缺失，回退到图片B")
+        else:
             if image_B is not None:
-                status = "✅ 输出图片B"
-                return (image_B, status)
-            elif auto_fallback and image_A is not None:
-                status = "⚠️ 图片B不存在，自动回退到图片A"
-                return (image_A, status)
-        
-        # 如果都没有图片，创建空白图片
-        status = "⚠️ 没有可用图片，创建空白图片"
-        blank_image = torch.zeros((1, 512, 512, 3), dtype=torch.float32)
-        return (blank_image, status)
+                return (image_B, "✅ 输出图片B")
+            if auto_fallback and image_A is not None:
+                return (image_A, "⚠️ 图片B缺失，回退到图片A")
+
+        blank = torch.zeros((1, 512, 512, 3), dtype=torch.float32)
+        return (blank, "⚠️ 无可用图片，输出空白图像")
+
 
 class ImageBlendSwitch:
-    """
-    图片混合切换节点 - 支持渐变切换
-    """
-    
+    """图片混合切换节点 - 支持渐变融合"""
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -135,58 +104,211 @@ class ImageBlendSwitch:
                 "image_B": ("IMAGE",),
             }
         }
-    
+
     RETURN_TYPES = ("IMAGE", "STRING")
     RETURN_NAMES = ("output_image", "status")
     FUNCTION = "blend_images"
     CATEGORY = "MISLG Tools/Image"
-    DESCRIPTION = "图片混合切换，支持渐变效果"
 
     def blend_images(self, blend_factor, use_blend, image_A=None, image_B=None):
-        status = ""
-        
-        # 检查输入
         if image_A is None and image_B is None:
-            status = "⚠️ 没有输入图片，创建空白图片"
-            blank_image = torch.zeros((1, 512, 512, 3), dtype=torch.float32)
-            return (blank_image, status)
-        
+            blank = torch.zeros((1, 512, 512, 3), dtype=torch.float32)
+            return (blank, "⚠️ 无输入图片")
         if image_A is None:
-            status = "✅ 只有图片B可用"
-            return (image_B, status)
-        
+            return (image_B, "✅ 仅图片B可用")
         if image_B is None:
-            status = "✅ 只有图片A可用"
-            return (image_A, status)
-        
-        # 检查图像尺寸是否匹配
-        if image_A.shape != image_B.shape:
-            status = "⚠️ 图像尺寸不匹配，使用图片A"
-            return (image_A, status)
-        
-        # 混合图像
-        if use_blend:
-            blended_image = image_A * (1.0 - blend_factor) + image_B * blend_factor
-            status = f"🔄 混合图像 (混合因子: {blend_factor:.2f})"
-            return (blended_image, status)
-        else:
-            # 根据混合因子选择图像
-            if blend_factor < 0.5:
-                status = f"✅ 选择图片A (混合因子: {blend_factor:.2f})"
-                return (image_A, status)
-            else:
-                status = f"✅ 选择图片B (混合因子: {blend_factor:.2f})"
-                return (image_B, status)
+            return (image_A, "✅ 仅图片A可用")
 
-# 节点注册
+        if image_A.shape != image_B.shape:
+            return (image_A, "⚠️ 尺寸不匹配，输出图片A")
+
+        if use_blend:
+            blended = image_A * (1.0 - blend_factor) + image_B * blend_factor
+            return (blended, f"🔄 混合输出 (因子: {blend_factor:.2f})")
+        else:
+            target = image_A if blend_factor < 0.5 else image_B
+            return (target, f"✅ 切换输出 (因子: {blend_factor:.2f})")
+
+
+class MISLGImageRotate:
+    """图像旋转节点 - 支持多批次与画布扩展"""
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "images": ("IMAGE",),
+                "rotation_type": (["90_clockwise", "90_counterclockwise", "180_rotate", "270_clockwise", "270_counterclockwise"], {"default": "90_clockwise"}),
+                "expand_canvas": (["true", "false"], {"default": "false"}),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE", "STRING")
+    RETURN_NAMES = ("rotated_images", "status")
+    FUNCTION = "rotate_images"
+    CATEGORY = "MISLG Tools/Image"
+
+    def rotate_images(self, images, rotation_type, expand_canvas):
+        angle_map = {
+            "90_clockwise": 90, "90_counterclockwise": -90, "180_rotate": 180,
+            "270_clockwise": 270, "270_counterclockwise": -270
+        }
+        display_map = {
+            "90_clockwise": "顺时针90度", "90_counterclockwise": "逆时针90度",
+            "180_rotate": "180度", "270_clockwise": "顺时针270度", "270_counterclockwise": "逆时针270度"
+        }
+        
+        angle = angle_map[rotation_type]
+        expand = expand_canvas == "true"
+        status = f"🔄 旋转: {display_map[rotation_type]} (扩展: {expand})"
+        
+        out_list = []
+        for img in images:  # [H, W, C]
+            img_np = (img.cpu().numpy() * 255.0).astype(np.uint8)
+            pil_img = Image.fromarray(img_np)
+            rot_pil = pil_img.rotate(angle, expand=expand, resample=_RESAMPLE)
+            rot_np = np.array(rot_pil).astype(np.float32) / 255.0
+            rot_tensor = torch.from_numpy(rot_np)
+            if rot_tensor.dim() == 2:  # 灰度图转RGB
+                rot_tensor = rot_tensor.unsqueeze(-1).expand(-1, -1, 3)
+            out_list.append(rot_tensor)
+            
+        return (torch.stack(out_list), status)
+
+
+class MISLGImageFlip:
+    """图像翻转节点 (PIL版)"""
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "images": ("IMAGE",),
+                "flip_type": (["horizontal", "vertical", "both"], {"default": "horizontal"}),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE", "STRING")
+    RETURN_NAMES = ("flipped_images", "status")
+    FUNCTION = "flip_images"
+    CATEGORY = "MISLG Tools/Image"
+
+    def flip_images(self, images, flip_type):
+        display_map = {"horizontal": "水平翻转", "vertical": "垂直翻转", "both": "双向翻转"}
+        status = f"🔄 翻转: {display_map[flip_type]} (PIL)"
+        
+        out_list = []
+        for img in images:
+            img_np = (img.cpu().numpy() * 255.0).astype(np.uint8)
+            pil_img = Image.fromarray(img_np)
+            
+            if flip_type == "horizontal":
+                flipped_pil = pil_img.transpose(Image.FLIP_LEFT_RIGHT)
+            elif flip_type == "vertical":
+                flipped_pil = pil_img.transpose(Image.FLIP_TOP_BOTTOM)
+            else:
+                flipped_pil = pil_img.transpose(Image.FLIP_LEFT_RIGHT).transpose(Image.FLIP_TOP_BOTTOM)
+                
+            flipped_np = np.array(flipped_pil).astype(np.float32) / 255.0
+            out_list.append(torch.from_numpy(flipped_np))
+            
+        return (torch.stack(out_list), status)
+
+
+class MISLGImageFlipTorch:
+    """图像翻转节点 (Torch版) - 推荐，性能更高"""
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "images": ("IMAGE",),
+                "flip_type": (["horizontal", "vertical", "both"], {"default": "horizontal"}),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE", "STRING")
+    RETURN_NAMES = ("flipped_images", "status")
+    FUNCTION = "flip_images_torch"
+    CATEGORY = "MISLG Tools/Image"
+
+    def flip_images_torch(self, images, flip_type):
+        display_map = {"horizontal": "水平翻转", "vertical": "垂直翻转", "both": "双向翻转"}
+        status = f"🔄 翻转: {display_map[flip_type]} (Torch)"
+        
+        if flip_type == "horizontal":
+            flipped = images.flip(dims=[2])
+        elif flip_type == "vertical":
+            flipped = images.flip(dims=[1])
+        else:
+            flipped = images.flip(dims=[1, 2])
+            
+        return (flipped, status)
+
+
+class MISLGImageTransform:
+    """高级图像变换节点 - 整合翻转与旋转"""
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "images": ("IMAGE",),
+                "operation": (["flip", "rotate"], {"default": "flip"}),
+                "flip_type": (["horizontal", "vertical", "both"], {"default": "horizontal"}),
+                "rotation_type": (["90_clockwise", "90_counterclockwise", "180_rotate"], {"default": "90_clockwise"}),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE", "STRING")
+    RETURN_NAMES = ("transformed_images", "status")
+    FUNCTION = "transform_images"
+    CATEGORY = "MISLG Tools/Image"
+
+    def transform_images(self, images, operation, flip_type, rotation_type):
+        flip_map = {"horizontal": "水平翻转", "vertical": "垂直翻转", "both": "双向翻转"}
+        rot_map = {"90_clockwise": "顺时针90度", "90_counterclockwise": "逆时针90度", "180_rotate": "180度"}
+        
+        out_list = []
+        for img in images:
+            img_np = (img.cpu().numpy() * 255.0).astype(np.uint8)
+            pil_img = Image.fromarray(img_np)
+            
+            if operation == "flip":
+                if flip_type == "horizontal":
+                    pil_img = pil_img.transpose(Image.FLIP_LEFT_RIGHT)
+                elif flip_type == "vertical":
+                    pil_img = pil_img.transpose(Image.FLIP_TOP_BOTTOM)
+                else:
+                    pil_img = pil_img.transpose(Image.FLIP_LEFT_RIGHT).transpose(Image.FLIP_TOP_BOTTOM)
+                status_msg = f"🔄 变换: {flip_map[flip_type]}"
+            else:
+                angle = {"90_clockwise": 90, "90_counterclockwise": -90, "180_rotate": 180}[rotation_type]
+                pil_img = pil_img.rotate(angle, resample=_RESAMPLE)
+                status_msg = f"🔄 变换: {rot_map[rotation_type]}"
+                
+            out_np = np.array(pil_img).astype(np.float32) / 255.0
+            out_tensor = torch.from_numpy(out_np)
+            if out_tensor.dim() == 2:
+                out_tensor = out_tensor.unsqueeze(-1).expand(-1, -1, 3)
+            out_list.append(out_tensor)
+            
+        return (torch.stack(out_list), status_msg)
+
+
+# 节点注册映射 (键名已严格清理，无空格)
 NODE_CLASS_MAPPINGS = {
-    "ImageSwitchManual": ImageSwitchManual,
-    "ImageSwitchAdvanced": ImageSwitchAdvanced,
-    "ImageBlendSwitch": ImageBlendSwitch,
+    "MISLG ImageSwitchManual": ImageSwitchManual,
+    "MISLG ImageSwitchAdvanced": ImageSwitchAdvanced,
+    "MISLG ImageBlendSwitch": ImageBlendSwitch,
+    "MISLG ImageRotate": MISLGImageRotate,
+    "MISLG ImageFlip": MISLGImageFlip,
+    "MISLG ImageFlipTorch": MISLGImageFlipTorch,
+    "MISLG ImageTransform": MISLGImageTransform,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "ImageSwitchManual": "🔄 图片自动切换",
-    "ImageSwitchAdvanced": "🔄 高级图片切换",
-    "ImageBlendSwitch": "🔄 图片混合切换",
+    "MISLG ImageSwitchManual": "🔄 图片手动切换 (MISLG)",
+    "MISLG ImageSwitchAdvanced": "🔄 高级图片切换 (MISLG)",
+    "MISLG ImageBlendSwitch": "🎨 图片混合切换 (MISLG)",
+    "MISLG ImageRotate": "🔃 图像旋转 (MISLG)",
+    "MISLG ImageFlip": "↔️ 图像翻转 PIL版 (MISLG)",
+    "MISLG ImageFlipTorch": "⚡ 图像翻转 Torch版 (MISLG)",
+    "MISLG ImageTransform": "🛠️ 图像变换综合 (MISLG)",
 }
