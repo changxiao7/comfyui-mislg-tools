@@ -34,7 +34,8 @@ try:
     from .model_unloader_io import *
     from .instant_preview_loader import *
     from .ksampler_with_info import *
-    from .asr_subtitle_converter import *  # ✅ 新增：ASR 字幕转换器
+    from .asr_subtitle_converter import *
+    from .read_txt_directory import *  # ✅ 新增：读取TXT目录(批量迭代)
 
     modules = [
         empty_input_nodes,
@@ -47,7 +48,8 @@ try:
         model_unloader_io,
         instant_preview_loader,
         ksampler_with_info,
-        asr_subtitle_converter  # ✅ 注册新模块
+        asr_subtitle_converter,
+        read_txt_directory  # ✅ 注册新模块
     ]
 
     for module in modules:
@@ -58,7 +60,7 @@ try:
 
     print(f"✅ MISLG Tools v1.3.4 已成功加载")
     print(f"   已注册 {len(NODE_CLASS_MAPPINGS)} 个节点")
-    print(f"   包含功能: 空节点/VAE优化/图像转换/图片切换/模型卸载/即时预览/K采样器信息/ASR字幕转换")
+    print(f"   包含功能: 空节点/VAE优化/图像转换/图片切换/模型卸载/即时预览/K采样器信息/ASR字幕转换/读取TXT目录")
     if len(NODE_CLASS_MAPPINGS) > 0:
         print(f"   节点列表: {', '.join(NODE_CLASS_MAPPINGS.keys())}")
 
@@ -77,4 +79,4 @@ except Exception as e:
 # ======================================================
 version = "1.3.4"
 author = "MISLG"
-description = "MISLG Tools - ComfyUI 自定义工具节点包 (含 ASR 字幕转换器、即时预览、K采样器信息等)"
+description = "MISLG Tools - ComfyUI 自定义工具节点包 (含 ASR 字幕转换器、即时预览、K采样器信息、读取TXT目录等)"
