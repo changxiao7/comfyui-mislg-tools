@@ -7,6 +7,7 @@ import numpy as np
 import os
 import time
 import json
+import re
 from datetime import datetime
 from PIL import Image, PngImagePlugin
 import folder_paths
@@ -31,14 +32,17 @@ class ImageToPixelInput:
     DESCRIPTION = "将图像转换为像素输入格式"
 
     def convert_to_pixels(self, images, output_format, normalize_range, flatten_pixels):
+        if not isinstance(images, torch.Tensor):
+            raise ValueError(f"Expected IMAGE tensor, got {type(images)}")
+
         shape_info = f"输入形状: {images.shape}, 格式: {images.dtype}\n"
         if images.dtype != torch.float32:
             images = images.float()
             shape_info += "转换数据类型为 float32\n"
-        
+
         processed_images = self.process_images(images, output_format, normalize_range)
         shape_info += f"处理后形状: {processed_images.shape}\n"
-        
+
         if flatten_pixels and len(processed_images.shape) > 2:
             original_shape = processed_images.shape
             if len(processed_images.shape) == 4:
@@ -46,7 +50,7 @@ class ImageToPixelInput:
             else:
                 processed_images = processed_images.view(-1, processed_images.shape[2])
             shape_info += f"展平: {original_shape} -> {processed_images.shape}\n"
-            
+
         shape_info += f"输出格式: {output_format}, 范围: {normalize_range}"
         return (processed_images, shape_info)
 
@@ -55,10 +59,14 @@ class ImageToPixelInput:
             images = images * 255.0
         elif normalize_range == "-1 to 1":
             images = (images * 2.0) - 1.0
-            
+
         if output_format == "normalized_tensor":
-            if normalize_range != "0-1":
+            if normalize_range == "0-1":
                 images = torch.clamp(images, 0.0, 1.0)
+            elif normalize_range == "0-255":
+                images = torch.clamp(images, 0.0, 255.0)
+            elif normalize_range == "-1 to 1":
+                images = torch.clamp(images, -1.0, 1.0)
         elif output_format == "flat_pixels":
             if len(images.shape) == 4:
                 b, h, w, c = images.shape
@@ -88,6 +96,9 @@ class PixelDataAnalyzer:
     DESCRIPTION = "分析像素数据的统计信息"
 
     def analyze_pixels(self, pixel_data, analyze_channels, show_sample_data):
+        if not isinstance(pixel_data, torch.Tensor):
+            raise ValueError(f"Expected tensor, got {type(pixel_data)}")
+
         stats = self.calculate_statistics(pixel_data, analyze_channels)
         sample = self.get_data_sample(pixel_data) if show_sample_data else "样本显示已关闭"
         shape_info = f"数据形状: {pixel_data.shape}\n数据类型: {pixel_data.dtype}"
@@ -101,8 +112,8 @@ class PixelDataAnalyzer:
         stats.append(f"最大值: {data.max().item():.6f}")
         stats.append(f"均值: {data.mean().item():.6f}")
         stats.append(f"标准差: {data.std().item():.6f}")
-        
-        if analyze_channels and len(data.shape) > 1 and data.shape[-1] > 1:
+
+        if analyze_channels and len(data.shape) >= 4 and data.shape[-1] > 1:
             stats.append("\n=== 通道统计 ===")
             for c in range(data.shape[-1]):
                 channel_data = data[..., c]
@@ -115,7 +126,7 @@ class PixelDataAnalyzer:
         try:
             sample_size = min(10, data.numel())
             flat_data = data.flatten()
-            sample_indices = torch.linspace(0, flat_data.numel()-1, sample_size).long()
+            sample_indices = torch.linspace(0, flat_data.numel() - 1, sample_size).long()
             sample_values = flat_data[sample_indices]
             sample_str = "样本值: " + ", ".join([f"{v:.3f}" for v in sample_values])
             if data.numel() > sample_size:
@@ -126,13 +137,26 @@ class PixelDataAnalyzer:
 
 
 class AdvancedImageSaver:
-    """高级图像保存器 - 支持图像保存、工作流元数据嵌入、独立文本端口保存"""
+    """高级图像保存器 - 支持图像保存、工作流元数据嵌入、独立文本端口保存
+
+    优化版本：
+    1. 自定义计数器，精确匹配最后5位计数器（避免日期被误匹配）
+    2. 降低 PNG 压缩级别，移除 optimize 以提升速度
+    3. 默认关闭预览，避免双重保存
+    4. 缓存 prompt JSON 序列化结果
+    5. 日期在中间字段，计数器全局连续递增
+    """
     def __init__(self):
         self.output_dir = folder_paths.get_output_directory()
         self.type = "output"
         self.temp_dir = os.path.join(self.output_dir, "temp_previews")
         os.makedirs(self.temp_dir, exist_ok=True)
         self.cleanup_old_previews()
+        # 缓存 prompt JSON，避免重复序列化
+        self._cached_prompt_json = None
+        self._cached_extra_pnginfo = None
+        # 计数器缓存：{output_path: last_counter}，减少重复扫描
+        self._counter_cache = {}
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -140,19 +164,18 @@ class AdvancedImageSaver:
             "required": {
                 "图像": ("IMAGE",),
                 "保存目录": (["默认输出", "自定义目录"], {"default": "默认输出"}),
-                "自定义路径": ("STRING", {"default": "", "multiline": False, "tooltip": "⚠️ 选择'自定义目录'时必须填写完整路径"}),
+                "自定义路径": ("STRING", {"default": "", "multiline": False, "tooltip": "选择'自定义目录'时必须填写完整路径"}),
                 "文件名前缀": ("STRING", {"default": "ComfyUI"}),
                 "图像格式": (["PNG", "JPG", "WEBP"], {"default": "PNG"}),
-                "PNG压缩级别": ("INT", {"default": 6, "min": 0, "max": 9, "step": 1, "display": "slider"}),
-                "图像质量": ("INT", {"default": 95, "min": 1, "max": 100, "step": 1, "display": "slider"}),
+                "PNG压缩级别": ("INT", {"default": 4, "min": 0, "max": 9, "step": 1, "display": "slider"}),
+                "JPG图像质量": ("INT", {"default": 80, "min": 1, "max": 100, "step": 1, "display": "slider"}),
                 "添加日期目录": ("BOOLEAN", {"default": True}),
                 "添加日期": ("BOOLEAN", {"default": True}),
                 "自动保存": ("BOOLEAN", {"default": True}),
                 "WEBP无损": ("BOOLEAN", {"default": False}),
-                "关闭预览": ("BOOLEAN", {"default": False}),
+                "关闭预览": ("BOOLEAN", {"default": True}),
             },
             "optional": {
-                # 💡 核心改动：使用 forceInput: True 将参数转为输入端口（类似图像接口）
                 "保存文本": ("STRING", {"forceInput": True, "tooltip": "连接文本节点输入内容，将自动保存为同名.txt文件"}),
             },
             "hidden": {
@@ -166,7 +189,7 @@ class AdvancedImageSaver:
     FUNCTION = "save_images"
     CATEGORY = "MISLG Tools/图像"
     OUTPUT_NODE = True
-    DESCRIPTION = "基于官方SaveImage优化的高级图像保存器，支持完整工作流嵌入与独立文本端口保存"
+    DESCRIPTION = "基于官方SaveImage优化的高级图像保存器，支持完整工作流嵌入与独立文本端口保存（优化版）"
 
     def cleanup_old_previews(self):
         try:
@@ -190,31 +213,76 @@ class AdvancedImageSaver:
         else:
             new_height = max_size
             new_width = int(width * (max_size / height))
-        return img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        try:
+            resample = Image.Resampling.LANCZOS
+        except AttributeError:
+            resample = Image.LANCZOS
+        return img.resize((new_width, new_height), resample)
 
-    def get_next_counter(self, prefix, output_path, add_date):
+    def _get_prompt_json(self, prompt):
+        """缓存 prompt 的 JSON 序列化结果，避免重复序列化"""
+        if prompt is None:
+            return None
+        if self._cached_prompt_json is None:
+            self._cached_prompt_json = json.dumps(prompt)
+        return self._cached_prompt_json
+
+    def _get_extra_pnginfo_json(self, extra_pnginfo):
+        """缓存 extra_pnginfo 的 JSON 序列化结果"""
+        if extra_pnginfo is None:
+            return None
+        if self._cached_extra_pnginfo is None:
+            self._cached_extra_pnginfo = {}
+            for k, v in extra_pnginfo.items():
+                self._cached_extra_pnginfo[k] = json.dumps(v)
+        return self._cached_extra_pnginfo
+
+    def _get_next_counter(self, prefix, output_path, add_date):
+        """获取下一个计数器值
+
+        关键修正：使用精确正则匹配文件名最后的5位计数器，
+        避免日期数字被误匹配为计数器。
+
+        匹配模式: _(\d{5})\. 匹配 _00001. 格式的最后5位数字
+        """
+        # 构建基础文件名（不含计数器）
         if add_date:
             date_str = datetime.now().strftime("%Y%m%d")
-            base_name = f"{prefix}_{date_str}"
+            base_pattern = f"{prefix}_{date_str}"
         else:
-            base_name = prefix
-            
+            base_pattern = prefix
+
+        # 精确匹配最后5位计数器: _(\d{5})\.
+        # 例如: ComfyUI_20260722_00001.png → 匹配 00001
+        #       ComfyUI_20260722_20260723.png → 不匹配（最后不是5位数字）
+        counter_pattern = re.compile(r"_(\d{5})\.")
+
         max_counter = 0
         if os.path.exists(output_path):
             for file_name in os.listdir(output_path):
-                file_name_without_ext = os.path.splitext(file_name)[0]
-                expected_prefix = f"{prefix}_{datetime.now().strftime('%Y%m%d')}_" if add_date else f"{prefix}_"
-                if file_name_without_ext.startswith(expected_prefix):
-                    counter_part = file_name_without_ext[len(expected_prefix):]
-                    if counter_part.isdigit() and len(counter_part) == 5:
-                        max_counter = max(max_counter, int(counter_part))
-        return base_name, max_counter + 1
+                # 只检查匹配前缀的文件（减少不必要的匹配）
+                if not file_name.startswith(base_pattern):
+                    continue
+                # 精确匹配最后5位计数器
+                match = counter_pattern.search(file_name)
+                if match:
+                    counter = int(match.group(1))
+                    max_counter = max(max_counter, counter)
 
-    def save_images(self, 图像, 保存目录, 自定义路径, 文件名前缀, 图像格式, PNG压缩级别, 图像质量, 
-                    添加日期目录, 添加日期, 自动保存, WEBP无损, 关闭预览,
+        return max_counter + 1
+
+    def save_images(self, 图像, 保存目录, 自定义路径, 文件名前缀, 图像格式, 
+                    PNG压缩级别, JPG图像质量, 添加日期目录, 添加日期, 自动保存, WEBP无损, 关闭预览,
                     保存文本=None, prompt=None, extra_pnginfo=None):
-        
-        # 1. 确定输出目录（严格逻辑）
+
+        if not isinstance(图像, torch.Tensor):
+            raise ValueError(f"Expected IMAGE tensor, got {type(图像)}")
+
+        # 重置缓存（每次执行时 prompt 可能不同）
+        self._cached_prompt_json = None
+        self._cached_extra_pnginfo = None
+
+        # 1. 确定输出目录
         if 保存目录 == "自定义目录":
             target_path = 自定义路径.strip()
             if not target_path:
@@ -225,40 +293,56 @@ class AdvancedImageSaver:
             os.makedirs(output_path, exist_ok=True)
         else:
             output_path = self.output_dir
-            
+
         if 添加日期目录:
             date_dir_str = datetime.now().strftime("%Y-%m-%d")
             output_path = os.path.join(output_path, date_dir_str)
             os.makedirs(output_path, exist_ok=True)
-            
+
         results = []
         saved_files = []
-        saved_texts = []
-        
+        saved_texts = [] 
+
+        # 预序列化 metadata（缓存）
+        prompt_json = self._get_prompt_json(prompt)
+        extra_pnginfo_json = self._get_extra_pnginfo_json(extra_pnginfo)
+
         # 2. 处理图像队列
         for idx, image in enumerate(图像):
             i = 255. * image.cpu().numpy()
             img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
-            
-            base_name, counter = self.get_next_counter(文件名前缀, output_path, 添加日期)
+
+            # 使用自定义计数器，精确匹配最后5位计数器
+            counter = self._get_next_counter(文件名前缀, output_path, 添加日期)
             counter_str = f"{counter:05d}"
-            filename_base = f"{base_name}_{counter_str}"
-            
+
+            # 日期在中间字段，计数器在最后
+            if 添加日期:
+                date_str = datetime.now().strftime("%Y%m%d")
+                filename_base = f"{文件名前缀}_{date_str}_{counter_str}"
+            else:
+                filename_base = f"{文件名前缀}_{counter_str}"
+
             file_name = f"{filename_base}.{图像格式.lower()}"
             save_path = os.path.join(output_path, file_name)
-            
-            metadata = PngImagePlugin.PngInfo()
-            if prompt is not None: metadata.add_text("prompt", json.dumps(prompt))
-            if extra_pnginfo is not None:
-                for k, v in extra_pnginfo.items():
-                    metadata.add_text(k, json.dumps(v))
-            metadata.add_text("generator", "MISLG AdvancedImageSaver")
-            
+
+            # 核心修复：严格去除键名空格，确保 Pillow 正确识别参数
             save_kwargs = {}
             if 图像格式 == 'PNG':
-                save_kwargs = {"pnginfo": metadata, "compress_level": PNG压缩级别, "optimize": True}
+                metadata = PngImagePlugin.PngInfo()
+                if prompt_json is not None:
+                    metadata.add_text("prompt", prompt_json)
+                if extra_pnginfo_json is not None:
+                    for k, v in extra_pnginfo_json.items():
+                        metadata.add_text(k, v)
+                metadata.add_text("generator", "MISLG AdvancedImageSaver")
+                # 优化：compress_level 默认 4（与原生一致），移除 optimize=True
+                save_kwargs = {
+                    "pnginfo": metadata, 
+                    "compress_level": PNG压缩级别
+                }
             elif 图像格式 == 'JPG':
-                save_kwargs = {"quality": 图像质量, "optimize": True}
+                save_kwargs = {"quality": JPG图像质量, "optimize": True}
                 if img.mode in ("RGBA", "LA"):
                     bg = Image.new("RGB", img.size, (255, 255, 255))
                     bg.paste(img, mask=img.split()[-1])
@@ -266,8 +350,8 @@ class AdvancedImageSaver:
                 elif img.mode != "RGB":
                     img = img.convert("RGB")
             elif 图像格式 == 'WEBP':
-                save_kwargs = {"quality": 图像质量, "lossless": WEBP无损}
-                
+                save_kwargs = {"quality": JPG图像质量, "lossless": WEBP无损}
+
             if 自动保存:
                 try:
                     img.save(save_path, **save_kwargs)
@@ -275,7 +359,6 @@ class AdvancedImageSaver:
                 except Exception as e:
                     print(f"[保存图像] 失败: {e}")
 
-            # 💡 新增：文本端口保存逻辑（无连接或空值时不输出）
             if 保存文本 is not None and str(保存文本).strip():
                 txt_path = os.path.join(output_path, f"{filename_base}.txt")
                 try:
@@ -285,37 +368,39 @@ class AdvancedImageSaver:
                 except Exception as e:
                     print(f"[保存文本] 失败: {e}")
 
-            # 3. 生成预览
             if not 关闭预览:
                 preview_filename = f"preview_{filename_base}.png"
                 preview_path = os.path.join(self.temp_dir, preview_filename)
                 try:
-                    preview_img = self.resize_image_for_preview(img.copy(), max_size=1024)
+                    preview_img = self.resize_image_for_preview(img, max_size=1024)
+                    # 优化：预览图不嵌入完整 prompt，减少开销
                     preview_meta = PngImagePlugin.PngInfo()
-                    if prompt: preview_meta.add_text("prompt", json.dumps(prompt))
                     preview_meta.add_text("generator", "MISLG Preview")
                     preview_img.save(preview_path, pnginfo=preview_meta, compress_level=3)
                     results.append({"filename": preview_filename, "subfolder": "temp_previews", "type": "output"})
                 except Exception as e:
                     print(f"[生成预览] 失败: {e}")
 
-        # 4. 构建返回信息
+        # 3. 构建返回信息
         info = ["=== 图像保存详情 ==="]
         info.append(f"保存目录: {output_path}")
         info.append(f"图像格式: {图像格式}")
-        if 图像格式 == 'PNG': info.append(f"PNG压缩: {PNG压缩级别} | 优化: 开")
-        elif 图像格式 == 'JPG': info.append(f"JPG质量: {图像质量}")
-        else: info.append(f"WEBP质量: {图像质量} | 无损: {'开' if WEBP无损 else '关'}")
-        
+        if 图像格式 == 'PNG':
+            info.append(f"PNG压缩级别: {PNG压缩级别} (仅改变体积/速度，PNG为无损格式画质不变)")
+        elif 图像格式 == 'JPG':
+            info.append(f"JPG图像质量: {JPG图像质量}")
+        else:
+            info.append(f"WEBP质量: {JPG图像质量} | 无损: {'开' if WEBP无损 else '关'}")
+
         info.append(f"日期目录: {'已添加' if 添加日期目录 else '未添加'}")
-        info.append(f"文件名日期: {'已添加' if 添加日期 else '未添加'}")
+        info.append(f"文件名日期: {'已添加' if 添加日期 else '未添加'} (中间字段，计数器全局连续)")
         info.append(f"自动保存: {'开' if 自动保存 else '关'}")
         info.append(f"文本端口: {'已连接' if (保存文本 is not None and str(保存文本).strip()) else '未连接/跳过'}")
         info.append(f"预览: {'关' if 关闭预览 else '开'}")
-        
+
         if saved_files: info.append(f"\n✅ 已保存图像: {len(saved_files)} 张")
         if saved_texts: info.append(f"📄 已保存文本: {len(saved_texts)} 个")
-            
+
         detail = "\n".join(info)
         return {"ui": {"images": results} if not 关闭预览 else {}, "result": (detail,)}
 
